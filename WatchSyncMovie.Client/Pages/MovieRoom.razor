@@ -1,0 +1,792 @@
+@page "/room/{RoomId?}"
+@using WatchSyncMovie.Client.Models
+@using WatchSyncMovie.Client.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject SignalRService SignalRService
+@inject VideoPlayerService VideoPlayerService
+@inject HttpClient HttpClient
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<PageTitle>Watch Room - @(currentRoom?.Name ?? "Loading...")</PageTitle>
+
+<div class="movie-room-container">
+    @if (!isConnected && !isConnecting)
+    {
+        <div class="join-room-modal">
+            <div class="modal-content">
+                <h3>Join Room</h3>
+                @if (!string.IsNullOrEmpty(RoomId))
+                {
+                    <p>Room ID: <strong>@RoomId</strong></p>
+                }
+                <div class="form-group">
+                    <label>Username:</label>
+                    <input @bind="username" @onkeypress="HandleUsernameKeyPress" class="form-control" placeholder="Enter your username" />
+                </div>
+                @if (requiresPassword)
+                {
+                    <div class="form-group">
+                        <label>Password:</label>
+                        <input @bind="password" @onkeypress="HandlePasswordKeyPress" type="password" class="form-control" placeholder="Enter room password" />
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">
+                        @errorMessage
+                        <button type="button" class="btn-close" aria-label="Close" @onclick="ClearError"></button>
+                    </div>
+                }
+                <div class="button-group">
+                    @if (string.IsNullOrEmpty(RoomId))
+                    {
+                        <button @onclick="CreateRoom" class="btn btn-primary" disabled="@isConnecting">
+                            <i class="fas fa-plus"></i> Create Room
+                        </button>
+                    }
+                    else
+                    {
+                        <button @onclick="JoinRoom" class="btn btn-primary" disabled="@isConnecting">
+                            <i class="fas fa-sign-in-alt"></i> Join Room
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else if (isConnected && currentRoom != null)
+    {
+        <div class="room-header">
+            <h2><i class="fas fa-film"></i> @currentRoom.Name</h2>
+            <div class="room-info">
+                <span><i class="fas fa-users"></i> @currentRoom.Users.Count users</span>
+                <span class="room-id">Room ID: @currentRoom.Id</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="video-section">
+                @if (currentMovie != null)
+                {
+                    <div class="video-container" id="videoContainer">
+                        <!-- Video player will be initialized here by JavaScript -->
+                    </div>
+                    <div class="movie-info">
+                        <h4>@currentMovie.Title</h4>
+                        @if (!string.IsNullOrEmpty(currentMovie.Description))
+                        {
+                            <p>@currentMovie.Description</p>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="no-movie">
+                        <i class="fas fa-video"></i>
+                        <h4>No movie selected</h4>
+                        <p>The host needs to select a movie to start watching.</p>
+                    </div>
+                }
+                
+                @if (isHost)
+                {
+                    <div class="host-controls">
+                        <h5><i class="fas fa-crown"></i> Host Controls</h5>
+                        <div class="host-buttons">
+                            <button @onclick="ShowMovieSelector" class="btn btn-secondary">
+                                <i class="fas fa-folder-open"></i> Select Movie
+                            </button>
+                            <button @onclick="ShowAddMovieModal" class="btn btn-secondary">
+                                <i class="fas fa-plus"></i> Add Movie
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="sidebar">
+                <div class="users-panel">
+                    <h5><i class="fas fa-users"></i> Users (@currentRoom.Users.Count)</h5>
+                    <div class="users-list">
+                        @foreach (var user in currentRoom.Users)
+                        {
+                            <div class="user-item">
+                                <i class="fas @(user.IsHost ? "fa-crown" : "fa-user")"></i>
+                                <span>@user.Username</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="chat-panel">
+                    <h5><i class="fas fa-comments"></i> Chat</h5>
+                    <div class="chat-messages" @ref="chatContainer">
+                        @foreach (var message in chatMessages)
+                        {
+                            <div class="chat-message">
+                                <strong>@message.Username:</strong>
+                                <span>@message.Message</span>
+                                <small>@message.Timestamp.ToString("HH:mm")</small>
+                            </div>
+                        }
+                    </div>
+                    <div class="chat-input">
+                        <input @bind="chatMessage" @onkeypress="HandleChatKeyPress" class="form-control" placeholder="Type a message..." />
+                        <button @onclick="SendMessage" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Connecting to room...</p>
+        </div>
+    }
+
+    <!-- Movie Selector Modal -->
+    @if (showMovieSelector)
+    {
+        <div class="modal-overlay" @onclick="HideMovieSelector">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h4>Select Movie</h4>
+                    <button @onclick="HideMovieSelector" class="btn-close">×</button>
+                </div>
+                <div class="modal-body">
+                    @if (availableMovies.Any())
+                    {
+                        <div class="movies-grid">
+                            @foreach (var movie in availableMovies)
+                            {
+                                <div class="movie-card" @onclick="(() => SelectMovie(movie.Id))">
+                                    @if (!string.IsNullOrEmpty(movie.ThumbnailUrl))
+                                    {
+                                        <img src="@movie.ThumbnailUrl" alt="@movie.Title" />
+                                    }
+                                    else
+                                    {
+                                        <div class="movie-placeholder">
+                                            <i class="fas fa-film"></i>
+                                        </div>
+                                    }
+                                    <div class="movie-info">
+                                        <h6>@movie.Title</h6>
+                                        <p>@movie.Description</p>
+                                        <small class="movie-type">
+                                            @if (movie.Type == MovieType.Url)
+                                            {
+                                                <i class="fas fa-link"></i><span>URL</span>
+                                            }
+                                            else
+                                            {
+                                                <i class="fas fa-server"></i><span>Server File</span>
+                                            }
+                                        </small>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="no-movies-message">
+                            <i class="fas fa-film"></i>
+                            <p>No movies available.</p>
+                            <small>Add movies via URL, upload files, or place video files in the server's <code>/wwwroot/videos/</code> folder.</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Add Movie Modal -->
+    @if (showAddMovieModal)
+    {
+        <div class="modal-overlay" @onclick="HideAddMovieModal">
+            <div class="modal-content" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h4>Add Movie</h4>
+                    <button @onclick="HideAddMovieModal" class="btn-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="add-movie-tabs">
+                        <button class="tab-button @(addMovieTab == "url" ? "active" : "")" @onclick="SetUrlTab">
+                            <i class="fas fa-link"></i> From URL
+                        </button>
+                        <button class="tab-button @(addMovieTab == "file" ? "active" : "")" @onclick="SetFileTab">
+                            <i class="fas fa-upload"></i> Upload File
+                        </button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Title:</label>
+                        <input @bind="newMovieTitle" class="form-control" placeholder="Movie title" />
+                    </div>
+
+                    @if (addMovieTab == "url")
+                    {
+                        <div class="form-group">
+                            <label>Video URL:</label>
+                            <input @bind="newMovieUrl" class="form-control" placeholder="https://example.com/video.mp4" />
+                        </div>
+                    }
+                    else if (addMovieTab == "file")
+                    {
+                        <div class="form-group">
+                            <label>Video File:</label>
+                            <InputFile OnChange="OnFileSelected" class="form-control" accept=".mp4,.webm,.ogg,.avi,.mov,.mkv" />
+                            @if (selectedFile != null)
+                            {
+                                <small class="text-muted">Selected: @selectedFile.Name (@FormatFileSize(selectedFile.Size))</small>
+                            }
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <label>Description (optional):</label>
+                        <textarea @bind="newMovieDescription" class="form-control" placeholder="Movie description"></textarea>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(uploadError))
+                    {
+                        <div class="alert alert-danger">@uploadError</div>
+                    }
+
+                    <div class="button-group">
+                        @if (isUploading)
+                        {
+                            <button class="btn btn-primary" disabled>
+                                <i class="fas fa-spinner fa-spin"></i> 
+                                @(addMovieTab == "file" ? "Uploading..." : "Adding...")
+                            </button>
+                            @if (uploadProgress > 0)
+                            {
+                                <div class="upload-progress">
+                                    <div class="progress-bar" style="width: @(uploadProgress)%"></div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <button @onclick="AddMovie" class="btn btn-primary" disabled="@(!CanAddMovie())">
+                                <i class="fas @(addMovieTab == "file" ? "fa-upload" : "fa-plus")"></i> 
+                                @(addMovieTab == "file" ? "Upload Movie" : "Add Movie")
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? RoomId { get; set; }
+
+    private bool isConnected = false;
+    private bool isConnecting = false;
+    private bool requiresPassword = false;
+    private bool isHost = false;
+    private string username = "";
+    private string password = "";
+    private string errorMessage = "";
+    private Room? currentRoom;
+    private Movie? currentMovie;
+    private List<Movie> availableMovies = new();
+    private List<ChatMessage> chatMessages = new();
+    private string chatMessage = "";
+    private ElementReference chatContainer;
+
+    // Modals
+    private bool showMovieSelector = false;
+    private bool showAddMovieModal = false;
+    private string newMovieTitle = "";
+    private string newMovieUrl = "";
+    private string newMovieDescription = "";
+    
+    // File upload
+    private string addMovieTab = "url";
+    private IBrowserFile? selectedFile;
+    private bool isUploading = false;
+    private int uploadProgress = 0;
+    private string uploadError = "";
+
+    public class ChatMessage
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("Username")]
+        public string Username { get; set; } = "";
+        
+        [System.Text.Json.Serialization.JsonPropertyName("Message")]
+        public string Message { get; set; } = "";
+        
+        [System.Text.Json.Serialization.JsonPropertyName("Timestamp")]
+        public DateTime Timestamp { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SignalRService.StartAsync();
+        SetupSignalREvents();
+        await LoadMovies();
+    }
+
+    private void SetupSignalREvents()
+    {
+        SignalRService.RoomJoined += OnRoomJoined;
+        SignalRService.RoomCreated += OnRoomCreated;
+        SignalRService.UserJoined += OnUserJoined;
+        SignalRService.UserLeft += OnUserLeft;
+        SignalRService.MovieChanged += OnMovieChanged;
+        SignalRService.PlayReceived += OnPlayReceived;
+        SignalRService.PauseReceived += OnPauseReceived;
+        SignalRService.SeekReceived += OnSeekReceived;
+        SignalRService.ErrorReceived += OnErrorReceived;
+        SignalRService.MessageReceived += OnMessageReceived;
+    }
+
+    private async Task LoadMovies()
+    {
+        try
+        {
+            availableMovies = await HttpClient.GetFromJsonAsync<List<Movie>>("api/movies") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load movies: {ex.Message}");
+        }
+    }
+
+    private async Task CreateRoom()
+    {
+        if (string.IsNullOrWhiteSpace(username)) return;
+        
+        isConnecting = true;
+        errorMessage = "";
+        var roomName = $"{username}'s Room";
+        
+        try
+        {
+            await SignalRService.CreateRoomAsync(roomName, username, password);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to create room: {ex.Message}";
+            isConnecting = false;
+        }
+    }
+
+    private async Task JoinRoom()
+    {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(RoomId)) return;
+        
+        isConnecting = true;
+        errorMessage = "";
+        
+        try
+        {
+            await SignalRService.JoinRoomAsync(RoomId, username, password);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to join room: {ex.Message}";
+            isConnecting = false;
+        }
+    }
+
+    private void OnRoomJoined(Room room)
+    {
+        currentRoom = room;
+        isConnected = true;
+        isConnecting = false;
+        isHost = room.Users.Any(u => u.Username == username && u.IsHost);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRoomCreated(Room room)
+    {
+        currentRoom = room;
+        isConnected = true;
+        isConnecting = false;
+        isHost = true;
+        Navigation.NavigateTo($"/room/{room.Id}");
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnUserJoined(User user)
+    {
+        if (currentRoom != null)
+        {
+            currentRoom.Users.Add(user);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnUserLeft(User user)
+    {
+        if (currentRoom != null)
+        {
+            currentRoom.Users.RemoveAll(u => u.ConnectionId == user.ConnectionId);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async void OnMovieChanged(Movie movie)
+    {
+        currentMovie = movie;
+        await InvokeAsync(StateHasChanged); // DOM'u önce güncelle
+        
+        if (movie != null)
+        {
+            try
+            {
+                // DOM render olması için kısa bir bekleme
+                await Task.Delay(100);
+                await VideoPlayerService.InitializePlayerAsync("videoContainer", movie.VideoUrl);
+                
+                // Set up SignalR callbacks for sync
+                await JSRuntime.InvokeVoidAsync("videoPlayer.setBlazorReference", _objRef);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to initialize video player: {ex.Message}");
+                errorMessage = "Failed to load video player. Please refresh the page.";
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async void OnPlayReceived(TimeSpan position)
+    {
+        // Sync received from SignalR - update video player directly (no feedback loop)
+        await VideoPlayerService.SetCurrentTimeAsync(position.TotalSeconds);
+        await VideoPlayerService.PlayAsync();
+    }
+
+    private async void OnPauseReceived(TimeSpan position)
+    {
+        // Sync received from SignalR - update video player directly (no feedback loop)
+        await VideoPlayerService.SetCurrentTimeAsync(position.TotalSeconds);
+        await VideoPlayerService.PauseAsync();
+    }
+
+    private async void OnSeekReceived(TimeSpan position)
+    {
+        // Sync received from SignalR - update video player directly (no feedback loop)
+        await VideoPlayerService.SetCurrentTimeAsync(position.TotalSeconds);
+    }
+
+    private void OnErrorReceived(string error)
+    {
+        errorMessage = error;
+        isConnecting = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnMessageReceived(object messageObj)
+    {
+        try
+        {
+            ChatMessage? message = null;
+            
+            // Method 1: Direct JsonElement parsing
+            if (messageObj is System.Text.Json.JsonElement jsonElement)
+            {
+                message = new ChatMessage
+                {
+                    Username = jsonElement.GetProperty("username").GetString() ?? "",
+                    Message = jsonElement.GetProperty("message").GetString() ?? "",
+                    Timestamp = jsonElement.GetProperty("timestamp").GetDateTime()
+                };
+            }
+            // Method 2: Serialize-Deserialize with JsonPropertyName attributes
+            else
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(messageObj);
+                message = System.Text.Json.JsonSerializer.Deserialize<ChatMessage>(json);
+            }
+            
+            if (message != null)
+            {
+                chatMessages.Add(message);
+                InvokeAsync(StateHasChanged);
+                InvokeAsync(() => ScrollChatToBottom());
+            }
+        }
+            catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to parse chat message: {ex.Message}");
+            Console.WriteLine($"Message object type: {messageObj?.GetType()}");
+            Console.WriteLine($"Message content: {messageObj}");
+        }
+    }
+
+    private async Task ScrollChatToBottom()
+    {
+        await Task.Delay(50);
+        await JSRuntime.InvokeVoidAsync("scrollToBottom", chatContainer);
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(chatMessage)) return;
+        
+        await SignalRService.SendMessageAsync(chatMessage);
+        chatMessage = "";
+    }
+
+    private async Task SelectMovie(string movieId)
+    {
+        try
+        {
+            await SignalRService.ChangeMovieAsync(movieId);
+            HideMovieSelector();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to select movie: {ex.Message}");
+            // Could show user-friendly error message here
+        }
+    }
+
+    private async Task AddMovie()
+    {
+        if (string.IsNullOrWhiteSpace(newMovieTitle)) return;
+
+        isUploading = true;
+        uploadError = "";
+        uploadProgress = 0;
+
+        try
+        {
+            if (addMovieTab == "url")
+            {
+                if (string.IsNullOrWhiteSpace(newMovieUrl)) return;
+
+                var request = new
+                {
+                    Url = newMovieUrl,
+                    Title = newMovieTitle,
+                    Description = newMovieDescription
+                };
+
+                var response = await HttpClient.PostAsJsonAsync("api/movies/from-url", request);
+                if (response.IsSuccessStatusCode)
+                {
+                    await LoadMovies();
+                    HideAddMovieModal();
+                    ResetAddMovieForm();
+                }
+                else
+                {
+                    uploadError = "Failed to add movie from URL";
+                }
+            }
+            else if (addMovieTab == "file" && selectedFile != null)
+            {
+                await UploadMovieFile();
+            }
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"Error: {ex.Message}";
+            Console.WriteLine($"Failed to add movie: {ex.Message}");
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private async Task UploadMovieFile()
+    {
+        if (selectedFile == null) return;
+
+        const long maxFileSize = 500 * 1024 * 1024; // 500MB limit
+        if (selectedFile.Size > maxFileSize)
+        {
+            uploadError = "File size exceeds 500MB limit";
+            return;
+        }
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            
+            var fileContent = new StreamContent(selectedFile.OpenReadStream(maxFileSize));
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(selectedFile.ContentType);
+            
+            content.Add(fileContent, "File", selectedFile.Name);
+            content.Add(new StringContent(newMovieTitle), "Title");
+            content.Add(new StringContent(newMovieDescription ?? ""), "Description");
+
+            var response = await HttpClient.PostAsync("api/movies/upload", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadMovies();
+                HideAddMovieModal();
+                ResetAddMovieForm();
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                uploadError = $"Upload failed: {errorContent}";
+            }
+        }
+        catch (Exception ex)
+        {
+            uploadError = $"Upload error: {ex.Message}";
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        uploadError = "";
+    }
+
+    private bool CanAddMovie()
+    {
+        if (string.IsNullOrWhiteSpace(newMovieTitle)) return false;
+        
+        if (addMovieTab == "url")
+            return !string.IsNullOrWhiteSpace(newMovieUrl);
+        else if (addMovieTab == "file")
+            return selectedFile != null;
+            
+        return false;
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int counter = 0;
+        decimal number = bytes;
+        while (Math.Round(number / 1024) >= 1)
+        {
+            number /= 1024;
+            counter++;
+        }
+        return $"{number:n1} {suffixes[counter]}";
+    }
+
+    private void ResetAddMovieForm()
+    {
+        newMovieTitle = "";
+        newMovieUrl = "";
+        newMovieDescription = "";
+        selectedFile = null;
+        uploadError = "";
+        addMovieTab = "url";
+        uploadProgress = 0;
+    }
+
+    private void ClearError()
+    {
+        errorMessage = "";
+    }
+
+    private void SetUrlTab()
+    {
+        addMovieTab = "url";
+        uploadError = "";
+    }
+
+    private void SetFileTab()
+    {
+        addMovieTab = "file";
+        uploadError = "";
+    }
+
+    private async Task ShowMovieSelector() 
+    { 
+        showMovieSelector = true;
+        await LoadMovies(); // Refresh movie list to include wwwroot files
+    }
+    private void HideMovieSelector() => showMovieSelector = false;
+    private void ShowAddMovieModal() => showAddMovieModal = true;
+    private void HideAddMovieModal() 
+    { 
+        showAddMovieModal = false;
+        ResetAddMovieForm();
+    }
+
+    private async Task HandleUsernameKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            if (string.IsNullOrEmpty(RoomId))
+                await CreateRoom();
+            else
+                await JoinRoom();
+        }
+    }
+
+    private async Task HandlePasswordKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await JoinRoom();
+    }
+
+    private async Task HandleChatKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SendMessage();
+    }
+
+    [JSInvokable]
+    public async Task OnVideoPlay(double currentTime)
+    {
+        // Only host can control video playback
+        //if (isHost)
+        //{
+          var position = TimeSpan.FromSeconds(currentTime);
+            await SignalRService.PlayAsync(position);
+        //}
+    }
+
+    [JSInvokable]
+    public async Task OnVideoPause(double currentTime)
+    {
+        // Only host can control video playback
+        
+    //if (isHost)
+        //{
+            var position = TimeSpan.FromSeconds(currentTime);
+            await SignalRService.PauseAsync(position);
+        //}
+    }
+
+    [JSInvokable]
+    public async Task OnVideoSeek(double currentTime)
+    {
+        // Only host can control video playback  
+        if (isHost)
+        {
+            var position = TimeSpan.FromSeconds(currentTime);
+            await SignalRService.SeekAsync(position);
+        }
+    }
+
+    private DotNetObjectReference<MovieRoom>? _objRef;
+
+    protected override void OnInitialized()
+    {
+        _objRef = DotNetObjectReference.Create(this);
+        base.OnInitialized();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _objRef?.Dispose();
+        await SignalRService.DisposeAsync();
+    }
+} 

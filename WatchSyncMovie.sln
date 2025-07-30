@@ -1,0 +1,48 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WatchSyncMovie.Client", "WatchSyncMovie.Client\WatchSyncMovie.Client.csproj", "{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WatchSycnMovie.Server", "WatchSycnMovie.Server\WatchSycnMovie.Server.csproj", "{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Debug|x64.Build.0 = Debug|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Debug|x86.Build.0 = Debug|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Release|x64.ActiveCfg = Release|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Release|x64.Build.0 = Release|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Release|x86.ActiveCfg = Release|Any CPU
+		{A4EB1548-8DC6-4712-AD7C-BB4E0F6DBB14}.Release|x86.Build.0 = Release|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Debug|x64.Build.0 = Debug|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Debug|x86.Build.0 = Debug|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Release|Any CPU.Build.0 = Release|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Release|x64.ActiveCfg = Release|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Release|x64.Build.0 = Release|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Release|x86.ActiveCfg = Release|Any CPU
+		{64EBD5A8-0F89-4974-92F0-9AC5F4717D43}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
