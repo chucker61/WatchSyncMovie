@@ -1,0 +1,34 @@
+# Directories
+bin/
+obj/
+out/
+.vs/
+.vscode/
+*.user
+
+# Files
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Development files
+*.Development.json
+launchSettings.json
+
+# IDE files
+*.sln.docstates
+*.suo
+*.cache
+*.project.lock.json

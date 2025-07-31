@@ -9,7 +9,7 @@ public class SignalRService : IAsyncDisposable
     private HubConnection? _hubConnection;
     private readonly string _hubUrl;
 
-    public SignalRService(string hubUrl = "https://localhost:7083/movieSyncHub")
+    public SignalRService(string hubUrl = "https://watchsync-server.delightfulbay-1a92ac00.francecentral.azurecontainerapps.io/movieSyncHub")
     {
         _hubUrl = hubUrl;
     }

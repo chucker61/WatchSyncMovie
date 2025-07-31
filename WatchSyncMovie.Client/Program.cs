@@ -7,7 +7,7 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://localhost:7083/") });
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://watchsync-server.delightfulbay-1a92ac00.francecentral.azurecontainerapps.io") });
 builder.Services.AddScoped<SignalRService>();
 builder.Services.AddScoped<VideoPlayerService>();
 
